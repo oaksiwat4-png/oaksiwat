@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alcatel Switch Comparison Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Prompt, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; }
+        .project-switcher { display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; }
+        .nav-btn { padding: 12px 25px; border: 2px solid #2b6cb0; border-radius: 12px; cursor: pointer; font-size: 15px; font-weight: bold; transition: 0.3s; background: white; color: #2b6cb0; }
+        .nav-btn.active { background: #2b6cb0; color: white; box-shadow: 0 4px 10px rgba(43, 108, 176, 0.3); }
+        h1 { text-align: center; color: #1a202c; margin-bottom: 10px; }
+        .status-badge-container { text-align: center; margin-bottom: 20px; }
+        .status-badge { display: inline-block; color: white; padding: 8px 20px; border-radius: 20px; font-size: 15px; font-weight: bold; }
+        .settings-bar { background: #2d3748; color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .settings-bar select { padding: 8px; border-radius: 8px; font-weight: bold; color: #2d3748; cursor: pointer; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; }
+        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #718096; font-weight: normal; }
+        .card .value { font-size: 22px; font-weight: bold; color: #2d3748; }
+        .card.alert-red { background: #fff5f5; border: 1px solid #feb2b2; }
+        .card.alert-red h3, .card.alert-red .value { color: #c53030; }
+        .card.alert-green { background: #f0fff4; border: 1px solid #9ae6b4; }
+        .card.alert-green h3, .card.alert-green .value { color: #2f855a; }
+        .details-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        details { margin-bottom: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+        summary { padding: 14px; font-weight: 600; cursor: pointer; list-style: none; position: relative; border-bottom: 1px solid transparent; }
+        details[open] summary { border-bottom: 1px solid #e2e8f0; }
+        summary::after { content: '+'; position: absolute; right: 15px; }
+        details[open] summary::after { content: '−'; }
+        .calc-step { padding: 15px; font-size: 14.5px; line-height: 1.6; color: #4a5568; }
+        .calc-step ul { background: #f1f5f9; padding: 15px 15px 15px 35px; border-radius: 8px; margin: 10px 0; list-style-type: decimal; }
+        .calc-step li { margin-bottom: 8px; }
+        .chart-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .filter-buttons { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .btn { padding: 8px 15px; border: none; border-radius: 8px; cursor: pointer; font-family: 'Prompt'; font-size: 13px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="project-switcher">
+        <button id="btn-os6900" class="nav-btn active" onclick="switchProject('os6900')">OS6900-T48C6 (เคสแพง)</button>
+        <button id="btn-os6870" class="nav-btn" onclick="switchProject('os6870')">OS6870-48 (เคสถูก)</button>
+    </div>
+
+    <h1 id="main-title">Alcatel OS6900-T48C6 Comparison</h1>
+    
+    <div class="status-badge-container">
+        <div class="status-badge" id="current-status-badge">ข้อมูล: MA 15%</div>
+    </div>
+
+    <div class="settings-bar">
+        <label>⚙️ สมมติฐานสัดส่วน MA :</label>
+        <select id="ma-selector" onchange="updateDashboard()">
+            <option value="15">สมมติ MA 15%</option>
+            <option value="10">สมมติ MA 10%</option>
+        </select>
+    </div>
+
+    <div class="summary-grid">
+        <div class="card"><h3 id="label-old-year">ราคาเดิม</h3><div class="value" id="val-old-price">฿0</div></div>
+        <div class="card"><h3>ราคาประเมิน (7 ปี)</h3><div class="value" id="val-est-price">฿0</div></div>
+        <div class="card"><h3>ราคาเสนอขาย (7 ปี)</h3><div class="value" id="val-new-price">฿0</div></div>
+        <div class="card" id="alert-card">
+            <h3>ส่วนต่าง</h3>
+            <div class="value" id="val-diff-percent">0%</div>
+            <p id="val-diff-amount" style="font-size: 13px; margin: 5px 0 0 0;">(฿0)</p>
+        </div>
+    </div>
+
+    <div class="details-card">
+        <h3>📌 วิธีคำนวณแบบแสดงตัวเลข (Calculation Steps)</h3>
+        <details><summary id="sum-old">1. การถอดฐานราคาเดิม</summary><div class="calc-step" id="desc-old"></div></details>
+        <details><summary>2. การคำนวณราคาประเมิน (เงินเฟ้อ + MA 7 ปี)</summary><div class="calc-step" id="desc-est"></div></details>
+        <details><summary id="sum-new">3. การวิเคราะห์ราคาที่เสนอมาใหม่</summary><div class="calc-step" id="desc-new"></div></details>
+    </div>
+
+    <div class="chart-container">
+        <div class="filter-buttons">
+            <button class="btn" style="background:#edf2f7;" onclick="filterChart('all')">👁️ ทั้งหมด</button>
+            <button class="btn" style="background:#718096; color:white;" onclick="filterChart(0)">เฉพาะราคาเดิม</button>
+            <button class="btn" style="background:#38b2ac; color:white;" onclick="filterChart(1)">เฉพาะราคาประเมิน</button>
+            <button class="btn" style="background:#e53e3e; color:white;" onclick="filterChart(2)">เฉพาะราคาเสนอขาย</button>
+        </div>
+        <canvas id="priceTrendChart"></canvas>
+    </div>
+</div>
+
+<script>
+    let currentProject = 'os6900';
+    const db = {
+        os6900: {
+            title: "Alcatel OS6900-T48C6 Comparison",
+            oldYear: "ซื้อปี 2566 (รวม MA 5 ปี)",
+            oldPriceNum: 1037383,
+            newPriceNum: 1400000,
+            "15": {
+                est: 1356320, diff: "แพงกว่า 3.22%", amt: "+ ฿43,680", status: "red",
+                dataOld: [664113, 753334, 845232, 939887, 1037383, null, null],
+                dataEst: [725678, 823172, 923591, 1027023, 1133558, 1243289, 1356320],
+                dataNew: [749045, 849678, 953328, 1060093, 1170058, 1283323, 1400000],
+                descOld: `วิเคราะห์จากยอด 1,037,383 บาท (สัญญา 5 ปี):
+                <ul>
+                    <li>ตัวคูณ MA 3% สะสม 5 ปี = 1+1.03+1.03²+1.03³+1.03⁴ = 5.309</li>
+                    <li>ถอดราคาเครื่อง (H): H + (H × 15% × 5.309) = 1,037,383</li>
+                    <li>จะได้ <strong>ราคาเครื่อง: 577,490 บาท</strong> | <strong>MA ปีแรก: 86,623 บาท</strong></li>
+                </ul>`,
+                descEst: `ปรับฐานเงินเฟ้อจากปี 2566 -> 2569 (3 ปี):
+                <ul>
+                    <li>เงินเฟ้อ 3 ปี (1.03³) = +9.27%</li>
+                    <li>ราคาเครื่องประเมิน: 577,490 × 1.0927 = 631,023 บาท</li>
+                    <li>MA ปีแรกประเมิน: 86,623 × 1.0927 = 94,655 บาท</li>
+                    <li>ยอดรวม 7 ปี: 631,023 + (94,655 × 7.662) = <strong>1,356,320 บาท</strong></li>
+                </ul>`,
+                descNew: `วิเคราะห์จากยอดเสนอ 1,400,000 บาท (สัญญา 7 ปี):
+                <ul>
+                    <li>ตัวคูณ MA 3% สะสม 7 ปี = 7.662</li>
+                    <li>ถอดราคาเครื่อง: H + (H × 15% × 7.662) = 1,400,000</li>
+                    <li>จะได้ <strong>ราคาเครื่อง: 651,374 บาท</strong> | <strong>MA ปีแรก: 97,706 บาท</strong></li>
+                </ul>`
+            },
+            "10": {
+                est: 1307844, diff: "แพงกว่า 7.05%", amt: "+ ฿92,156", status: "red",
+                dataOld: [745392, 815188, 887078, 961125, 1037383, null, null],
+                dataEst: [814510, 890778, 969334, 1050247, 1133587, 1219428, 1307844],
+                dataNew: [871928, 953572, 1037665, 1124281, 1213496, 1305387, 1400000],
+                descOld: `วิเคราะห์จากยอด 1,037,383 บาท (สัญญา 5 ปี):
+                <ul>
+                    <li>ถอดราคาเครื่อง (H): H + (H × 10% × 5.309) = 1,037,383</li>
+                    <li>จะได้ <strong>ราคาเครื่อง: 677,629 บาท</strong> | <strong>MA ปีแรก: 67,763 บาท</strong></li>
+                </ul>`,
+                descEst: `ปรับฐานเงินเฟ้อจากปี 2566 -> 2569 (3 ปี):
+                <ul>
+                    <li>ราคาเครื่องประเมิน: 677,629 × 1.0927 = 740,446 บาท</li>
+                    <li>MA ปีแรกประเมิน: 67,763 × 1.0927 = 74,044 บาท</li>
+                    <li>ยอดรวม 7 ปี: 740,446 + (74,044 × 7.662) = <strong>1,307,844 บาท</strong></li>
+                </ul>`,
+                descNew: `วิเคราะห์จากยอดเสนอ 1,400,000 บาท (สัญญา 7 ปี):
+                <ul>
+                    <li>ถอดราคาเครื่อง: H + (H × 10% × 7.662) = 1,400,000</li>
+                    <li>จะได้ <strong>ราคาเครื่อง: 792,662 บาท</strong> | <strong>MA ปีแรก: 79,266 บาท</strong></li>
+                </ul>`
+            }
+        },
+        os6870: {
+            title: "Alcatel OS6870-48 Comparison",
+            oldYear: "ซื้อปี 2567 (ไม่มี MA)",
+            oldPriceNum: 260000,
+            newPriceNum: 420000,
+            "15": {
+                est: 592850, diff: "ถูกกว่าประเมิน 29.15%", amt: "- ฿172,850", status: "green",
+                dataOld: [260000, 260000, 260000, 260000, 260000, 260000, 260000],
+                dataEst: [317209, 359825, 403720, 448932, 495500, 543465, 592850],
+                dataNew: [224724, 254915, 286012, 318042, 351033, 385014, 420000],
+                descOld: `ราคาปี 2567:
+                <ul>
+                    <li>ซื้อเครื่องเปล่าไม่มี MA = <strong>260,000 บาท</strong></li>
+                </ul>`,
+                descEst: `ปรับฐานเงินเฟ้อจากปี 2567 -> 2569 (2 ปี):
+                <ul>
+                    <li>เงินเฟ้อ 2 ปี (1.03²) = +6.09%</li>
+                    <li>ราคาเครื่องประเมิน: 260,000 × 1.0609 = 275,834 บาท</li>
+                    <li>MA ปีแรกประเมิน (15%): 275,834 × 15% = 41,375 บาท</li>
+                    <li>ยอดรวม 7 ปี: 275,834 + (41,375 × 7.662) = <strong>592,850 บาท</strong></li>
+                </ul>`,
+                descNew: `วิเคราะห์จากยอดเสนอ 420,000 บาท (สัญญา 7 ปี):
+                <ul>
+                    <li>ถอดราคาเครื่อง: H + (H × 15% × 7.662) = 420,000</li>
+                    <li>จะได้ <strong>ราคาเครื่อง: 195,412 บาท</strong> | <strong>MA ปีแรก: 29,312 บาท</strong></li>
+                </ul>`
+            },
+            "10": {
+                est: 487178, diff: "ถูกกว่าประเมิน 13.79%", amt: "- ฿67,178", status: "green",
+                dataOld: [260000, 260000, 260000, 260000, 260000, 260000, 260000],
+                dataEst: [303417, 331827, 361090, 391231, 422276, 454252, 487178],
+                dataNew: [261579, 286072, 311300, 337285, 364050, 391618, 420000],
+                descOld: `ราคาปี 2567:
+                <ul><li>ราคาเครื่องเปล่า = <strong>260,000 บาท</strong></li></ul>`,
+                descEst: `ปรับฐานเงินเฟ้อจากปี 2567 -> 2569 (2 ปี):
+                <ul>
+                    <li>ราคาเครื่องประเมิน: 260,000 × 1.0609 = 275,834 บาท</li>
+                    <li>MA ปีแรกประเมิน (10%): 275,834 × 10% = 27,583 บาท</li>
+                    <li>ยอดรวม 7 ปี: 275,834 + (27,583 × 7.662) = <strong>487,178 บาท</strong></li>
+                </ul>`,
+                descNew: `วิเคราะห์จากยอดเสนอ 420,000 บาท (สัญญา 7 ปี):
+                <ul>
+                    <li>จะได้ <strong>ราคาเครื่อง: 237,799 บาท</strong> | <strong>MA ปีแรก: 23,780 บาท</strong></li>
+                </ul>`
+            }
+        }
+    };
+
+    const ctx = document.getElementById('priceTrendChart').getContext('2d');
+    let myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['ปีที่ 1', 'ปีที่ 2', 'ปีที่ 3', 'ปีที่ 4', 'ปีที่ 5', 'ปีที่ 6', 'ปีที่ 7'],
+            datasets: [
+                { label: 'ราคาเดิม', data: [], backgroundColor: '#718096' },
+                { label: 'ราคาประเมิน', data: [], backgroundColor: '#38b2ac' },
+                { label: 'ราคาเสนอขาย', data: [], backgroundColor: '#e53e3e' }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { family: 'Prompt' } } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '฿' + v.toLocaleString() } } } }
+    });
+
+    function switchProject(id) {
+        currentProject = id;
+        document.getElementById('btn-os6900').className = id === 'os6900' ? 'nav-btn active' : 'nav-btn';
+        document.getElementById('btn-os6870').className = id === 'os6870' ? 'nav-btn active' : 'nav-btn';
+        updateDashboard();
+    }
+
+    function updateDashboard() {
+        const ma = document.getElementById('ma-selector').value;
+        const p = db[currentProject];
+        const s = p[ma];
+
+        document.getElementById('main-title').innerText = p.title;
+        document.getElementById('label-old-year').innerText = p.oldYear;
+        document.getElementById('val-old-price').innerText = '฿' + p.oldPriceNum.toLocaleString();
+        document.getElementById('val-new-price').innerText = '฿' + p.newPriceNum.toLocaleString();
+        document.getElementById('val-est-price').innerText = '฿' + s.est.toLocaleString();
+        document.getElementById('val-diff-percent').innerText = s.diff;
+        document.getElementById('val-diff-amount').innerText = '(' + s.amt + ')';
+
+        const alertCard = document.getElementById('alert-card');
+        alertCard.className = s.status === 'red' ? 'card alert-red' : 'card alert-green';
+        
+        const badge = document.getElementById('current-status-badge');
+        badge.innerText = `ข้อมูล: ${p.title.split(' ')[1]} | สมมติฐาน MA ${ma}%`;
+        badge.style.background = s.status === 'red' ? '#e53e3e' : '#38a169';
+
+        document.getElementById('desc-old').innerHTML = s.descOld;
+        document.getElementById('desc-est').innerHTML = s.descEst;
+        document.getElementById('desc-new').innerHTML = s.descNew;
+
+        myChart.data.datasets[0].data = s.dataOld;
+        myChart.data.datasets[1].data = s.dataEst;
+        myChart.data.datasets[2].data = s.dataNew;
+        myChart.update();
+    }
+
+    function filterChart(idx) {
+        if(idx === 'all') {
+            myChart.setDatasetVisibility(0, true); myChart.setDatasetVisibility(1, true); myChart.setDatasetVisibility(2, true);
+        } else {
+            myChart.setDatasetVisibility(0, idx === 0);
+            myChart.setDatasetVisibility(1, idx === 1);
+            myChart.setDatasetVisibility(2, idx === 2);
+        }
+        myChart.update();
+    }
+
+    window.onload = updateDashboard;
+</script>
+</body>
+</html>
